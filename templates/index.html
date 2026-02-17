@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ empresa.nombre or 'FacturaMaster' }} | Sistema Profesional</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .card { border: none; border-radius: 15px; }
+        .navbar { background: #1a1a1a !important; }
+        .btn-delete { color: #dc3545; cursor: pointer; transition: 0.2s; }
+        .btn-delete:hover { color: #a71d2a; transform: scale(1.2); }
+        .anulada { opacity: 0.7; background-color: #fff5f5 !important; border: 1px solid #ebccd1 !important; }
+        .text-strike { text-decoration: line-through; color: #dc3545; }
+        #historial { max-height: 550px; overflow-y: auto; padding-right: 5px; }
+        .chart-container { position: relative; height:300px; width:100%; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark mb-4 shadow-sm">
+        <div class="container">
+            <span class="navbar-brand fw-bold">🚀 {{ empresa.nombre or 'FacturaMaster' }} <small class="fw-light opacity-75">v2.5</small></span>
+            <div>
+                <button class="btn btn-info btn-sm me-2 text-white" data-bs-toggle="modal" data-bs-target="#modalProductos">📦 Inventario</button>
+                <button class="btn btn-warning btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalAdmin">📊 Recaudación</button>
+                <button class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#modalConfig">⚙️ Configuración</button>
+                <a href="/logout" class="btn btn-danger btn-sm ms-3">Salir</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-5">
+                <div class="card p-4 shadow-sm mb-4 border-top border-primary border-4">
+                    <h4 class="mb-3 text-primary">Emisión de Factura</h4>
+                    <input type="text" id="ruc" class="form-control mb-2 fw-bold" placeholder="RUC o Cédula (Presiona TAB al terminar)" onchange="buscarCliente(this.value)">
+                    <input type="text" id="cliente" class="form-control mb-2" placeholder="Nombre del Cliente">
+                    <input type="email" id="correo" class="form-control mb-2" placeholder="Correo para envío de PDF">
+                    <div class="row g-2 mb-3">
+                        <div class="col-8"><input type="text" id="direccion" class="form-control" placeholder="Dirección"></div>
+                        <div class="col-4"><input type="text" id="telefono" class="form-control" placeholder="Telf."></div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="small fw-bold text-muted">DETALLE</label>
+                        <button class="btn btn-sm btn-outline-secondary py-0" onclick="limpiarTabla()" style="font-size: 0.7rem;">🧹 LIMPIAR</button>
+                    </div>
+
+                    <table class="table table-sm align-middle" id="tablaItems">
+                        <thead><tr class="small text-muted"><th>Descripción</th><th width="70">Cant.</th><th width="90">P. Unit</th><th width="30"></th></tr></thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="text" class="form-control desc" oninput="buscarSugerencias(this)" list="listaProds" placeholder="Producto..."></td>
+                                <td><input type="number" class="form-control cant" value="1"></td>
+                                <td><input type="number" class="form-control precio" step="0.01"></td>
+                                <td class="text-center"><span class="btn-delete" onclick="this.closest('tr').remove()">✖</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <datalist id="listaProds"></datalist>
+
+                    <button class="btn btn-sm btn-link text-primary p-0 mb-3" onclick="agregarFila()">+ Añadir fila</button>
+                    <button id="btnGenerar" class="btn btn-primary w-100 fw-bold py-2 shadow-sm" onclick="enviar()">GENERAR Y ENVIAR</button>
+                </div>
+            </div>
+
+            <div class="col-md-7">
+                <div class="card p-4 shadow-sm border-top border-dark border-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="m-0">Historial de Ventas</h5>
+                        <button class="btn btn-success btn-sm" onclick="descargarExcel()">📊 Exportar Excel</button>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6"><input type="text" id="busq" class="form-control form-control-sm" placeholder="Buscar cliente o factura..."></div>
+                        <div class="col-3"><input type="date" id="desde" class="form-control form-control-sm"></div>
+                        <div class="col-3"><input type="date" id="hasta" class="form-control form-control-sm"></div>
+                    </div>
+                    <div id="historial"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalProductos" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white"><h5>📦 Inventario de Productos</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <form id="formProducto" class="mb-4 p-3 bg-light rounded shadow-sm">
+                        <div class="row g-2">
+                            <div class="col-5"><input type="text" name="nombre" class="form-control" placeholder="Nombre del Producto" required></div>
+                            <div class="col-3"><input type="number" name="precio" step="0.01" class="form-control" placeholder="Precio IVA" required></div>
+                            <div class="col-2"><input type="number" name="stock" class="form-control" placeholder="Stock" required></div>
+                            <div class="col-2"><button type="submit" class="btn btn-success w-100">Añadir</button></div>
+                        </div>
+                    </form>
+                    <table class="table table-sm align-middle">
+                        <thead class="table-light"><tr><th>Producto</th><th>Precio</th><th width="100">Stock</th><th width="80">Acción</th></tr></thead>
+                        <tbody id="listaInventario"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalAdmin" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title">📊 Estadísticas de Ventas</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row text-center mb-4">
+                        <div class="col-6 border-end"><h6>Ventas Hoy</h6><h2 id="ventasHoy" class="text-primary">$0.00</h2></div>
+                        <div class="col-6"><h6>IVA Hoy</h6><h2 id="ivaHoy" class="text-success">$0.00</h2></div>
+                    </div>
+                    <hr>
+                    <h6 class="text-center text-muted mb-3">Ventas de los últimos 7 días</h6>
+                    <div class="chart-container">
+                        <canvas id="graficoVentas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalConfig" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title">⚙️ Configuración de Empresa</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formConfig" enctype="multipart/form-data">
+                        <div class="mb-2"><label class="small fw-bold">Nombre Comercial</label><input type="text" name="nombre" class="form-control" value="{{ empresa.nombre or '' }}" required></div>
+                        <div class="mb-2"><label class="small fw-bold">RUC</label><input type="text" name="ruc" class="form-control" value="{{ empresa.ruc or '' }}" required></div>
+                        <div class="mb-2"><label class="small fw-bold">Dirección Matriz</label><input type="text" name="direccion" class="form-control" value="{{ empresa.direccion or '' }}"></div>
+                        <div class="mb-2"><label class="small fw-bold">Teléfono de Contacto</label><input type="text" name="telefono" class="form-control" value="{{ empresa.telefono or '' }}"></div>
+                        <div class="mb-3"><label class="small fw-bold">Logo de Empresa</label><input type="file" name="logo" class="form-control" accept="image/*"></div>
+                        <button type="submit" class="btn btn-primary w-100">Guardar Configuración</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let productosData = [];
+        let miGrafico = null;
+
+        // BUSCAR CLIENTE
+        async function buscarCliente(ruc) {
+            if(!ruc) return;
+            const res = await fetch(`/api/clientes/${ruc}`);
+            if(res.ok) {
+                const c = await res.json();
+                if(c) {
+                    document.getElementById('cliente').value = c.nombre;
+                    document.getElementById('correo').value = c.correo;
+                    document.getElementById('direccion').value = c.direccion;
+                    document.getElementById('telefono').value = c.telefono;
+                }
+            }
+        }
+
+        // GRÁFICO DE VENTAS
+        async function cargarGrafico() {
+            const res = await fetch('/api/stats-grafico');
+            const datos = await res.json();
+            const ctx = document.getElementById('graficoVentas').getContext('2d');
+            
+            if (miGrafico) miGrafico.destroy();
+            
+            miGrafico = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: datos.map(d => d.fecha),
+                    datasets: [{
+                        label: 'Ventas Diarias ($)',
+                        data: datos.map(d => d.total),
+                        backgroundColor: 'rgba(13, 110, 253, 0.6)',
+                        borderColor: 'rgb(13, 110, 253)',
+                        borderWidth: 1
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        // INVENTARIO
+        async function cargarInventario() {
+            const res = await fetch('/api/productos');
+            productosData = await res.json();
+            document.getElementById('listaProds').innerHTML = productosData.map(p => `<option value="${p.nombre}">`).join('');
+            document.getElementById('listaInventario').innerHTML = productosData.map(p => `
+                <tr>
+                    <td><input type="text" id="edit-n-${p.id}" class="form-control form-control-sm border-0 bg-transparent" value="${p.nombre}"></td>
+                    <td><input type="number" id="edit-p-${p.id}" class="form-control form-control-sm border-0 bg-transparent" value="${p.precio_con_iva.toFixed(2)}" style="width:80px"></td>
+                    <td><input type="number" id="edit-s-${p.id}" class="form-control form-control-sm border-0 bg-transparent fw-bold ${p.stock <= 5 ? 'text-danger' : 'text-success'}" value="${p.stock}" style="width:60px"></td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-primary border-0" onclick="editarProd(${p.id})">💾</button>
+                        <button class="btn btn-sm btn-outline-danger border-0" onclick="borrarProd(${p.id})">🗑️</button>
+                    </td>
+                </tr>`).join('');
+        }
+
+        async function editarProd(id) {
+            const fd = new FormData();
+            fd.append('nombre', document.getElementById(`edit-n-${id}`).value);
+            fd.append('precio', document.getElementById(`edit-p-${id}`).value);
+            fd.append('stock', document.getElementById(`edit-s-${id}`).value);
+            await fetch(`/productos/editar/${id}`, { method: 'POST', body: fd });
+            cargarInventario();
+        }
+
+        async function borrarProd(id) {
+            if(confirm("¿Eliminar producto?")) {
+                await fetch(`/productos/${id}`, { method: 'DELETE' });
+                cargarInventario();
+            }
+        }
+
+        function buscarSugerencias(input) {
+            const prod = productosData.find(p => p.nombre === input.value);
+            if (prod) input.closest('tr').querySelector('.precio').value = prod.precio_con_iva;
+        }
+
+        // FACTURACIÓN
+        function agregarFila() {
+            const tr = `<tr>
+                <td><input type="text" class="form-control desc" oninput="buscarSugerencias(this)" list="listaProds" placeholder="Producto..."></td>
+                <td><input type="number" class="form-control cant" value="1"></td>
+                <td><input type="number" class="form-control precio" step="0.01"></td>
+                <td class="text-center"><span class="btn-delete" onclick="this.closest('tr').remove()">✖</span></td>
+            </tr>`;
+            document.querySelector('#tablaItems tbody').insertAdjacentHTML('beforeend', tr);
+        }
+
+        function limpiarTabla() {
+            if(confirm("¿Vaciar detalle?")) {
+                document.querySelector('#tablaItems tbody').innerHTML = '';
+                agregarFila();
+            }
+        }
+
+        async function enviar() {
+            const btn = document.getElementById('btnGenerar');
+            const items = Array.from(document.querySelectorAll('#tablaItems tbody tr')).map(tr => ({
+                descripcion: tr.querySelector('.desc').value,
+                cantidad: parseFloat(tr.querySelector('.cant').value) || 0,
+                precio_con_iva: parseFloat(tr.querySelector('.precio').value) || 0
+            })).filter(i => i.descripcion && i.cantidad > 0);
+
+            if(items.length === 0) return alert("Agregue productos");
+
+            btn.disabled = true; btn.innerText = "Enviando...";
+            const res = await fetch('/emitir-factura/', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    cliente: document.getElementById('cliente').value,
+                    ruc: document.getElementById('ruc').value,
+                    correo_cliente: document.getElementById('correo').value,
+                    direccion_cliente: document.getElementById('direccion').value,
+                    telefono_cliente: document.getElementById('telefono').value,
+                    items
+                })
+            });
+            if(res.ok) { alert("¡Factura Generada!"); location.reload(); }
+            else { alert("Error al generar factura"); btn.disabled = false; btn.innerText = "GENERAR Y ENVIAR"; }
+        }
+
+        async function cargarHistorial() {
+            const t = document.getElementById('busq').value, d = document.getElementById('desde').value, h = document.getElementById('hasta').value;
+            const res = await fetch(`/buscar/?termino=${t}&desde=${d}&hasta=${h}`);
+            const facts = await res.json();
+            
+            document.getElementById('historial').innerHTML = facts.map(f => `
+                <div class="alert ${f.anulada ? 'anulada' : 'bg-white border'} shadow-sm d-flex justify-content-between align-items-center mb-2 p-2">
+                    <div>
+                        <span class="badge ${f.anulada ? 'bg-danger' : 'bg-dark'} mb-1">${f.numero_factura}</span><br>
+                        <strong class="${f.anulada ? 'text-strike' : ''}">${f.cliente}</strong><br>
+                        <small class="text-muted">${new Date(f.fecha).toLocaleDateString()} | <b>$${f.total.toFixed(2)}</b></small>
+                    </div>
+                    <div>
+                        ${!f.anulada ? `<button class="btn btn-sm btn-outline-warning border-0" onclick="anularFactura(${f.id})">🚫</button>` : ''}
+                        <a href="/descargas/RIDE_${f.numero_factura}.pdf" target="_blank" class="btn btn-sm btn-outline-danger border-0">PDF</a>
+                    </div>
+                </div>`).join('');
+            
+            const sRes = await fetch('/stats/');
+            const s = await sRes.json();
+            document.getElementById('ventasHoy').innerText = `$${s.ventas_hoy.toFixed(2)}`;
+            document.getElementById('ivaHoy').innerText = `$${s.iva_hoy.toFixed(2)}`;
+        }
+
+        async function anularFactura(id) {
+            if(confirm("⚠ ¿ANULAR ESTA FACTURA? El stock se devolverá al inventario.")) {
+                await fetch(`/anular-factura/${id}`, { method: 'POST' });
+                cargarHistorial();
+                cargarInventario();
+            }
+        }
+
+        function descargarExcel() {
+            window.location.href = `/exportar-excel/?termino=${document.getElementById('busq').value}&desde=${document.getElementById('desde').value}&hasta=${document.getElementById('hasta').value}`;
+        }
+
+        // EVENTOS
+        document.getElementById('formConfig').onsubmit = async (e) => {
+            e.preventDefault();
+            await fetch('/config-empresa/', { method: 'POST', body: new FormData(e.target) });
+            alert("Configuración guardada"); location.reload();
+        };
+
+        document.getElementById('formProducto').onsubmit = async (e) => {
+            e.preventDefault();
+            await fetch('/productos/', { method: 'POST', body: new FormData(e.target) });
+            e.target.reset(); cargarInventario();
+        };
+
+        document.getElementById('modalAdmin').addEventListener('shown.bs.modal', cargarGrafico);
+        ['busq', 'desde', 'hasta'].forEach(id => document.getElementById(id).addEventListener('change', cargarHistorial));
+        document.getElementById('busq').addEventListener('input', cargarHistorial);
+        
+        cargarInventario(); cargarHistorial();
+    </script>
+</body>
+</html>
