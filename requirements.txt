@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+python-multipart
+jinja2
+passlib[bcrypt]
+pandas
+openpyxl
+reportlab
+qrcode[pil]
