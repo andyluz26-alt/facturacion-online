@@ -9,3 +9,5 @@ pandas
 openpyxl
 reportlab
 qrcode[pil]
+email-validator
+pydantic[email]
