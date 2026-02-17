@@ -4,6 +4,7 @@ sqlalchemy
 python-multipart
 jinja2
 passlib[bcrypt]
+cryptography
 pandas
 openpyxl
 reportlab
