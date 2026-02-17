@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
-from passlib.context import CryptContext 
+from passlib.context import CryptContext
 import os, smtplib, shutil
 import pandas as pd
 from email.message import EmailMessage
@@ -223,4 +223,5 @@ async def config_empresa(nombre: str = Form(...), ruc: str = Form(...), direccio
         with open(path, "wb") as b: shutil.copyfileobj(logo.file, b)
         emp.logo_path = path
     db.commit()
+
     return {"status": "ok"}
